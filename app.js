@@ -2,8 +2,8 @@
 (() => {
   const cfg=window.STEEL_CONFIG||{};
   const $=id=>document.getElementById(id);
-  const {roles,modules,SteelRecord,transformChangeValue,timeFields}=window.SteelDomain;
-  const state={session:null,profile:null,active:"overview",records:[],table:null,change:null,loading:false};
+  const {roles,modules,SteelRecord,transformChangeValue,timeFields,displayFactoryTime}=window.SteelDomain;
+  const state={session:null,profile:null,active:"overview",records:[],table:null,change:null,adminEdit:null,loading:false};
   const isConfigured=cfg.url?.startsWith("https://") && cfg.url.includes(".supabase.co") &&
     cfg.publishableKey?.startsWith("sb_publishable_");
   function notice(text,error=false){const el=$("global-message");el.className="message"+(error?" error":" good");el.textContent=text;}
@@ -23,7 +23,7 @@
   function fmt(value,key=""){
     if(value===null||value===undefined||value==="")return "—";
     if(key.endsWith("_at")||["start_time","arrived_at","loaded_at"].includes(key)) {
-      const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString();
+      return displayFactoryTime(value);
     }
     return String(value);
   }
@@ -81,9 +81,9 @@
       const summary=document.createElement("small");summary.textContent=m.summary;b.append(summary);list.append(b);
     });
   }
-  async function makeField(f){
+  async function makeField(f,prefix="f"){
     const box=document.createElement("div");box.className="field";
-    const label=document.createElement("label");label.textContent=f.label;label.htmlFor="f-"+f.key;box.append(label);
+    const label=document.createElement("label");label.textContent=f.label;label.htmlFor=prefix+"-"+f.key;box.append(label);
     let el;
     if(f.type==="select"||["heats","customers","sales_orders"].includes(f.type)){
       el=document.createElement("select");
@@ -93,10 +93,16 @@
       if(!options.length){const opt=document.createElement("option");opt.value="";opt.textContent="Create the related record first";el.append(opt);}
       options.forEach(([val,text])=>{const opt=document.createElement("option");opt.value=val;opt.textContent=text;el.append(opt);});
     }else{
-      el=document.createElement("input");el.type=f.type;el.autocomplete="off";
+      el=document.createElement("input");
+      el.type=f.type==="datetime-local"?"text":f.type;
+      el.autocomplete="off";
+      if(f.type==="datetime-local"){
+        el.placeholder="YYYY-MM-DD HH:MM";el.pattern="[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}";
+        el.title="24-hour English date: YYYY-MM-DD HH:MM";el.inputMode="numeric";el.lang="en-US";el.dir="ltr";
+      }
       if(f.type==="number"){el.step="any";el.min=f.key==="price_per_ton"?"0":"0.01";}
     }
-    el.id="f-"+f.key;el.name=f.key;el.required=f.required;
+    el.id=prefix+"-"+f.key;el.name=f.key;el.required=f.required;
     box.append(el);return box;
   }
   async function renderForm(table){
@@ -118,7 +124,7 @@
       $("records-count").textContent=records.length+" records";
       const m=modules[table],rows=records.map(row=>{
         const tr=document.createElement("tr");
-        tr.append(cell(row.id));m.list.forEach(key=>tr.append(cell(fmt(row[key],key))));
+        tr.append(cell(row.id));m.list.forEach(key=>tr.append(cell(key==="payment_terms" && !row[key]?"Not set (older order)":fmt(row[key],key))));
         const actions=document.createElement("td"),area=document.createElement("div");area.className="actions";
         if(mayRequest(table,row)){
           area.append(button(admin()?"Edit":"Request edit","outline small",()=>openChange(table,row,"update")));
@@ -139,22 +145,50 @@
       event.target.reset();notice("Record saved successfully in Supabase.");await loadRecords();
     }catch(err){notice("Save failed: "+err.message,true);}finally{submit.disabled=false;}
   });
+  // Admin direct-edit form; never require typing column names or prompt() values.
+  async function openAdminEditor(table,row){
+    if(!admin())return;
+    state.adminEdit={table,row};
+    $("admin-edit-title").textContent=`Edit ${modules[table].title} · #${row.id}`;
+    $("admin-edit-message").textContent="";
+    const fields=$("admin-edit-fields");fields.replaceChildren();
+    try{
+      for (const f of modules[table].fields){
+        const wrapper=await makeField(f,"edit");
+        const input=wrapper.querySelector("input, select");
+        const value=row[f.key];
+        input.value=timeFields.has(f.key)?displayFactoryTime(value):value===null||value===undefined?"":String(value);
+        fields.append(wrapper);
+      }
+      $("admin-edit-dialog").showModal();
+    }catch(err){notice("Cannot open editor: "+err.message,true);}
+  }
+  $("admin-edit-close").addEventListener("click",()=>$('admin-edit-dialog').close());
+  $("admin-edit-cancel").addEventListener("click",()=>$('admin-edit-dialog').close());
+  $("admin-edit-form").addEventListener("submit",async event=>{
+    event.preventDefault();if(!admin()||!state.adminEdit)return;
+    const {table,row}=state.adminEdit;
+    const save=$("admin-edit-save");save.disabled=true;
+    try{
+      const inputs=Object.fromEntries(new FormData(event.target));
+      const record=new SteelRecord(table,inputs).toJSON();
+      for(const f of modules[table].fields){
+        if(!f.required && (inputs[f.key]==="" || inputs[f.key]===undefined)) record[f.key]=null;
+      }
+      await repo.update(table,row.id,record);
+      $("admin-edit-dialog").close();state.adminEdit=null;
+      await loadRecords();notice("Changes saved directly and recorded in Audit Trail.");
+    }catch(err){const msg=$("admin-edit-message");msg.className="message error";msg.textContent="Cannot save: "+err.message;}
+    finally{save.disabled=false;}
+  });
   function openChange(table,row,action){
     if(!mayRequest(table,row))return;
     if(admin()){
       if(action==="delete"){
-        if(!window.confirm("Delete record #"+row.id+" permanently? This action is logged."))return;
-        repo.remove(table,row.id).then(()=>{notice("Record deleted and audited.");loadRecords();}).catch(err=>notice(err.message,true));return;
+        if(!window.confirm("Delete record #"+row.id+" permanently? This will be recorded in Audit Trail."))return;
+        repo.remove(table,row.id).then(()=>{loadRecords();notice("Record deleted and logged.");}).catch(err=>notice(err.message,true));return;
       }
-      const choices=modules[table].fields;
-      const key=window.prompt("Admin direct edit. Enter field name:\n"+choices.map(f=>f.key).join(" | "));
-      if(!key)return;
-      if(!choices.some(f=>f.key===key)){notice("Unknown field",true);return;}
-      const value=window.prompt("New value for "+key+" (use YYYY-MM-DDTHH:MM for dates):",String(row[key]??""));
-      if(value===null)return;
-      try{const val=transformChangeValue(key,value);repo.update(table,row.id,{[key]:val||null})
-          .then(()=>{notice("Admin edit saved and audited.");loadRecords();}).catch(err=>notice(err.message,true));}
-      catch(err){notice(err.message,true);}return;
+      openAdminEditor(table,row);return;
     }
     state.change={table,row,action};
     $("change-dialog-title").textContent=action==="delete"?"Request deletion":"Request a correction";
@@ -235,12 +269,20 @@
   async function loadAudit(){
     if(!["admin","management"].includes(state.profile?.role))return;
     try{
-      const events=await repo.fetch("audit_log",100);
-      const rows=events.map(r=>{const tr=document.createElement("tr");
-        [r.id,r.action,r.table_name,r.record_id,r.actor_id?String(r.actor_id).slice(0,8)+"…":"System",fmt(r.created_at,"created_at")].forEach(v=>tr.append(cell(v)));
-        return tr;
+      const [events,profiles]=await Promise.all([repo.fetch("audit_log",100),repo.fetch("profiles",250)]);
+      const names=new Map(profiles.map(p=>[p.user_id,`${p.full_name || "Staff"} (${p.email})`]));
+      const labels={INSERT:"Added",UPDATE:"Updated",DELETE:"Deleted"};
+      const rows=events.map(r=>{
+        const tr=document.createElement("tr");
+        const person=r.actor_id?(names.get(r.actor_id)||"User "+String(r.actor_id).slice(0,8)+"…"):"System";
+        [labels[r.action]||r.action,modules[r.table_name]?.title||r.table_name,"#"+r.record_id,person,fmt(r.created_at,"created_at")].forEach(v=>tr.append(cell(v)));
+        const td=document.createElement("td"),details=document.createElement("details"),sum=document.createElement("summary");
+        sum.textContent="Details";details.append(sum);
+        const content=document.createElement("pre");content.className="audit-details";
+        content.textContent="Before:\n"+JSON.stringify(r.old_data,null,2)+"\n\nAfter:\n"+JSON.stringify(r.new_data,null,2);
+        details.append(content);td.append(details);tr.append(td);return tr;
       });
-      tableInto("audit-table",["ID","Action","Table","Record","Actor","When"],rows);
+      tableInto("audit-table",["Action","Department","Record","Performed by","Date & time","Changes"],rows);
     }catch(err){notice("Audit unavailable: "+err.message,true);}
   }
   async function enterSession(session){

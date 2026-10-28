@@ -60,15 +60,15 @@
           <div class="panel"><div id="requests-table" class="table-wrap"></div></div>
         </section>
         <section id="users-view" class="screen" hidden>
-          <div class="heading"><div><h2>Staff accounts & roles</h2><p>Create new accounts in Supabase → Authentication → Users, then assign their roles here.</p></div><button id="refresh-users" class="outline" type="button">Refresh</button></div>
+          <div class="heading"><div><h2>Staff accounts & roles</h2><p>Each staff member signs in with a separate email and password. Create their account in Supabase → Authentication → Users, then select their department and click Save role here.</p><p class="muted">Only admins can assign roles. Staff can enter new records for their department; updates or deletions require an admin decision.</p></div><button id="refresh-users" class="outline" type="button">Refresh</button></div>
           <div class="panel"><div id="users-table" class="table-wrap"></div></div>
         </section>
         <section id="audit-view" class="screen" hidden>
           <div class="heading"><div><h2>Audit trail</h2><p>Database events: who changed what and when.</p></div><button id="refresh-audit" class="outline" type="button">Refresh</button></div>
-          <div class="panel"><div id="audit-table" class="table-wrap"></div></div>
+          <div class="panel"><p class="muted">Audit Trail is an automatic history of saved changes. It tells management WHO added, updated, or deleted WHICH record, and WHEN. Click Details to inspect old and new values.</p><div id="audit-table" class="table-wrap"></div></div>
         </section>
       </main>
-      <footer>SteelOps · Architecture-first student project · Version 0.2</footer>
+      <footer>SteelOps · Architecture-first student project · Version 0.3</footer>
     </div>
   </div>
 
@@ -82,6 +82,16 @@
       </div>
       <label for="change-reason">Reason</label><textarea id="change-reason" required minlength="5" placeholder="Explain why this record needs changing"></textarea>
       <div class="dialog-actions"><button id="cancel-change" type="button" class="outline">Cancel</button><button class="primary" type="submit">Submit request</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="admin-edit-dialog" class="wide-dialog">
+    <form id="admin-edit-form" class="modal-form">
+      <div class="heading compact"><h3 id="admin-edit-title">Edit record</h3><button type="button" id="admin-edit-close" class="icon-btn" aria-label="Close">✕</button></div>
+      <p class="muted">Admin: edit values directly, then save. Your changes are logged automatically.</p>
+      <div id="admin-edit-fields" class="fields"></div>
+      <div id="admin-edit-message" class="message" role="status"></div>
+      <div class="dialog-actions"><button id="admin-edit-cancel" type="button" class="outline">Cancel</button><button id="admin-edit-save" type="submit" class="primary">Save Changes</button></div>
     </form>
   </dialog>
 

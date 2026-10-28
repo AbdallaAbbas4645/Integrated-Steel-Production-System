@@ -46,8 +46,8 @@
       fields:[field("order_no","Order number"),field("customer_id","Customer","customers"),
         field("size_mm","Bar size (mm)","select",true,[["12","12 mm"],["14","14 mm"],["16","16 mm"]]),
         field("qty_tons","Ordered tons","number"),field("price_per_ton","Price per ton","number"),
-        field("status","Status","select",true,[["Open","Open"],["Confirmed","Confirmed"],["Completed","Completed"]])],
-      list:["order_no","customer_id","size_mm","qty_tons","price_per_ton","status"]
+        field("payment_terms","Payment option","select",true,[["Paid","Paid"],["Payment on Delivery","Payment on Delivery"]])],
+      list:["order_no","customer_id","size_mm","qty_tons","price_per_ton","payment_terms"]
     },
     loading_events: {
       title:"Loading & Dispatch",icon:"📦",summary:"Record truck information, loading and dispatch times.",
@@ -60,6 +60,23 @@
   };
   const numberFields = new Set(["weight_tons","delivered_tons","produced_tons","qty_tons","price_per_ton","size_mm","heat_id","customer_id","order_id"]);
   const timeFields = new Set(["start_time","ccm_poured_at","arrived_at","started_at","finished_at","loaded_at"]);
+  // Use an explicit numeric YYYY-MM-DD HH:MM format independent of OS/browser language.
+  function parseFactoryTime(raw) {
+    const match=/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(String(raw).trim());
+    if (!match) throw new Error("Date must be in YYYY-MM-DD HH:MM format (24-hour time).");
+    const [,y,m,d,h,min]=match.map(Number);
+    const date=new Date(y,m-1,d,h,min,0,0);
+    if (date.getFullYear()!==y||date.getMonth()!==m-1||date.getDate()!==d||date.getHours()!==h||date.getMinutes()!==min)
+      throw new Error("Invalid date or time: "+raw);
+    return date.toISOString();
+  }
+  const pad=n=>String(n).padStart(2,"0");
+  function displayFactoryTime(value){
+    if (!value) return "";
+    const date=new Date(value);
+    if(Number.isNaN(date.getTime())) return String(value);
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
   class SteelRecord {
     constructor(table, values) {
       if (!modules[table]) throw new Error("Unknown record type");
@@ -76,9 +93,7 @@
           }
           this.values[f.key] = n;
         } else if (timeFields.has(f.key)) {
-          const dt = new Date(v);
-          if (Number.isNaN(dt.getTime())) throw new Error("Invalid date for " + f.label);
-          this.values[f.key] = dt.toISOString();
+          this.values[f.key] = parseFactoryTime(v);
         } else {
           this.values[f.key] = v;
         }
@@ -97,11 +112,9 @@
     }
     if (timeFields.has(key)) {
       if (!value && ["finished_at","ccm_poured_at"].includes(key)) return "";
-      const date=new Date(value);
-      if(Number.isNaN(date.getTime())) throw new Error("Invalid time");
-      return date.toISOString();
+      return parseFactoryTime(value);
     }
     return value.trim();
   }
-  window.SteelDomain = {roles,modules,SteelRecord,transformChangeValue,numberFields,timeFields};
+  window.SteelDomain = {roles,modules,SteelRecord,transformChangeValue,numberFields,timeFields,parseFactoryTime,displayFactoryTime};
 })();
