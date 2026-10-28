@@ -14,13 +14,32 @@
 <body>
     <h1>Integrated Steel Production and Operations Management System</h1>
     <p>Welcome to the Steel Production Management System.</p>
+
+<section class="dashboard" id="login-section">
+    <div class="card">
+        <h2>Login</h2>
+
+        <form id="login-form">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" required>
+
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" required>
+
+            <button type="submit">Login</button>
+        </form>
+
+        <p id="login-message"></p>
+    </div>
+</section>
     
 
-<section class="dashboard">
+<section class="dashboard" id="dashboard-section" hidden>
     <h2>Production Dashboard</h2>
 
     <div class="card">
         <h3>Melting Operations</h3>
+        <button type="button" id="logout-btn">Logout</button>
         <p id="active-heats">Active Heats: 0</p>
 
         <form id="heat-form">
@@ -51,7 +70,7 @@
 
 
 <script src="script.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </body>
 
 </html>
