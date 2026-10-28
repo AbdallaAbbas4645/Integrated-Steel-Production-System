@@ -2,6 +2,6 @@
 // Supabase Project Overview: URL ends with .supabase.co (NOT /rest/v1/).
 // This file is browser-visible by design. Publishable key + strict RLS is the correct setup.
 window.STEEL_CONFIG = {
-  url: "REPLACE_WITH_YOUR_SUPABASE_PROJECT_URL",
-  publishableKey: "REPLACE_WITH_YOUR_PUBLISHABLE_KEY"
+  url: "https://pkmuoqnwuqnnynpyytmh.supabase.co",
+  publishableKey: "sb_publishable_vLo7YDy4GATGMtwFSizs7A_pgn-ll-q"
 };
