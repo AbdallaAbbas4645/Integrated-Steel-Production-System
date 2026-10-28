@@ -15,18 +15,40 @@
     <h1>Integrated Steel Production and Operations Management System</h1>
     <p>Welcome to the Steel Production Management System.</p>
     
+
 <section class="dashboard">
     <h2>Production Dashboard</h2>
 
     <div class="card">
         <h3>Melting Operations</h3>
-      
-<p id="active-heats">Active Heats: 0</p>
+        <p id="active-heats">Active Heats: 0</p>
 
-<button id="add-heat-btn" type="button">Add Test Heat</button>
+        <form id="heat-form">
+            <label for="heat-number">Heat Number</label>
+            <input type="text" id="heat-number" required>
 
+            <label for="furnace">Furnace</label>
+            <select id="furnace" required>
+                <option value="A">Furnace A</option>
+                <option value="B">Furnace B</option>
+            </select>
+
+            <label for="weight">Weight (tons)</label>
+            <input type="number" id="weight"
+                   min="0.1" step="0.1" required>
+
+            <label for="start-time">Start Time</label>
+            <input type="datetime-local"
+                   id="start-time" required>
+
+            <button type="submit">Save Heat</button>
+        </form>
+
+        <h3>Recorded Heats</h3>
+        <ul id="heat-list"></ul>
     </div>
 </section>
+
 
 <script src="script.js"></script>
 
