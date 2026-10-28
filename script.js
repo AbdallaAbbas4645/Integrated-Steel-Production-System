@@ -1,4 +1,4 @@
-const activeHeats = 0;
+const activeHeats = 5;
 
 document.querySelector(".card p").textContent =
     "Active Heats: " + activeHeats;
