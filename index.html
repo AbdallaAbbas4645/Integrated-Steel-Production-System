@@ -1,77 +1,94 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <title>Steel Production Management System</title>
-    
-<link rel="stylesheet" href="style.css">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Steel production, transfer, rolling, sales, and dispatch management">
+  <title>SteelOps | Production Management</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-    <h1>Integrated Steel Production and Operations Management System</h1>
-    <p>Welcome to the Steel Production Management System.</p>
+  <section id="login-screen" class="login-wrap">
+    <div class="login-logo">S<span>●</span></div>
+    <h1>SteelOps</h1>
+    <p>Integrated Steel Production & Operations Management</p>
+    <form id="login-form" class="panel login-form">
+      <h2>Sign in</h2>
+      <label for="login-email">Email address</label>
+      <input id="login-email" type="email" autocomplete="username" required>
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">Sign in</button>
+      <div id="login-message" class="message" role="status" aria-live="polite"></div>
+    </form>
+    <p class="tiny">Only authorized factory staff can access this system.</p>
+  </section>
 
-<section class="dashboard" id="login-section">
-    <div class="card">
-        <h2>Login</h2>
-
-        <form id="login-form">
-            <label for="login-email">Email</label>
-            <input type="email" id="login-email" required>
-
-            <label for="login-password">Password</label>
-            <input type="password" id="login-password" required>
-
-            <button type="submit">Login</button>
-        </form>
-
-        <p id="login-message"></p>
+  <div id="app-shell" class="shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">STEEL<span>OPS</span><small>OPERATIONS PLATFORM</small></div>
+      <div class="sidebar-label">WORKSPACE</div>
+      <nav id="navigation" aria-label="Modules"></nav>
+      <div class="sidebar-bottom"><span class="side-dot"></span> Protected by Supabase RLS</div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="top-left"><button id="menu-toggle" class="menu-button" type="button" aria-label="Toggle menu">☰</button>
+          <div><small>Integrated Steel Production</small><h1 id="current-title">Overview</h1></div></div>
+        <div class="top-user"><div class="identity"><strong id="user-name">User</strong><small id="user-role">Role</small></div><button id="logout-btn" class="outline" type="button">Logout</button></div>
+      </header>
+      <main id="main-content">
+        <div id="global-message" class="message" role="status" aria-live="polite"></div>
+        <section id="overview-view" class="screen">
+          <div class="heading"><div><h2>Factory overview</h2><p>Production, operations and your permitted modules</p></div><button id="refresh-overview" class="outline" type="button">Refresh</button></div>
+          <div id="overview-metrics" class="metrics"></div>
+          <div class="panel"><h3>Your access</h3><div id="overview-modules" class="module-grid"></div></div>
+        </section>
+        <section id="records-view" class="screen" hidden>
+          <div class="heading"><div><h2 id="module-title">Operations</h2><p id="module-subtitle">Create and review operational records</p></div><button id="refresh-records" class="outline" type="button">Refresh</button></div>
+          <div class="record-layout">
+            <section id="create-panel" class="panel"><h3 id="create-title">New record</h3><p class="muted">Records are saved permanently in Supabase.</p>
+              <form id="record-form"><div id="record-fields" class="fields"></div><button id="record-save" class="primary" type="submit">Save record</button></form>
+            </section>
+            <section class="panel list-panel"><div class="heading compact"><h3>Recorded data</h3><span class="tag" id="records-count">0 records</span></div>
+              <div id="records-table" class="table-wrap"></div>
+            </section>
+          </div>
+        </section>
+        <section id="requests-view" class="screen" hidden>
+          <div class="heading"><div><h2>Change requests</h2><p>Editing or deleting a saved record requires administrator approval.</p></div><button id="refresh-requests" class="outline" type="button">Refresh</button></div>
+          <div class="panel"><div id="requests-table" class="table-wrap"></div></div>
+        </section>
+        <section id="users-view" class="screen" hidden>
+          <div class="heading"><div><h2>Staff accounts & roles</h2><p>Create new accounts in Supabase → Authentication → Users, then assign their roles here.</p></div><button id="refresh-users" class="outline" type="button">Refresh</button></div>
+          <div class="panel"><div id="users-table" class="table-wrap"></div></div>
+        </section>
+        <section id="audit-view" class="screen" hidden>
+          <div class="heading"><div><h2>Audit trail</h2><p>Database events: who changed what and when.</p></div><button id="refresh-audit" class="outline" type="button">Refresh</button></div>
+          <div class="panel"><div id="audit-table" class="table-wrap"></div></div>
+        </section>
+      </main>
+      <footer>SteelOps · Architecture-first student project · Version 0.2</footer>
     </div>
-</section>
-    
+  </div>
 
-<section class="dashboard" id="dashboard-section" hidden>
-    <h2>Production Dashboard</h2>
+  <dialog id="change-dialog">
+    <form id="change-form" method="dialog" class="modal-form">
+      <div class="heading compact"><h3 id="change-dialog-title">Request a change</h3><button type="button" id="close-dialog" class="icon-btn">✕</button></div>
+      <p id="change-target" class="muted"></p>
+      <div id="change-fields">
+        <label for="change-field">Field to change</label><select id="change-field"></select>
+        <label for="change-value">New value</label><input id="change-value" type="text">
+      </div>
+      <label for="change-reason">Reason</label><textarea id="change-reason" required minlength="5" placeholder="Explain why this record needs changing"></textarea>
+      <div class="dialog-actions"><button id="cancel-change" type="button" class="outline">Cancel</button><button class="primary" type="submit">Submit request</button></div>
+    </form>
+  </dialog>
 
-    <div class="card">
-        <h3>Melting Operations</h3>
-        <button type="button" id="logout-btn">Logout</button>
-        <p id="active-heats">Active Heats: 0</p>
-
-        <form id="heat-form">
-            <label for="heat-number">Heat Number</label>
-            <input type="text" id="heat-number" required>
-
-            <label for="furnace">Furnace</label>
-            <select id="furnace" required>
-                <option value="A">Furnace A</option>
-                <option value="B">Furnace B</option>
-            </select>
-
-            <label for="weight">Weight (tons)</label>
-            <input type="number" id="weight"
-                   min="0.1" step="0.1" required>
-
-            <label for="start-time">Start Time</label>
-            <input type="datetime-local"
-                   id="start-time" required>
-
-            <button type="submit">Save Heat</button>
-        </form>
-
-        <h3>Recorded Heats</h3>
-        <ul id="heat-list"></ul>
-    </div>
-</section>
-
-
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js"></script>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="models.js"></script>
+  <script src="repository.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
-
