@@ -60,15 +60,15 @@
           <div class="panel"><div id="requests-table" class="table-wrap"></div></div>
         </section>
         <section id="users-view" class="screen" hidden>
-          <div class="heading"><div><h2>Staff accounts & roles</h2><p>Each staff member signs in with a separate email and password. Create their account in Supabase → Authentication → Users, then select their department and click Save role here.</p><p class="muted">Only admins can assign roles. Staff can enter new records for their department; updates or deletions require an admin decision.</p></div><button id="refresh-users" class="outline" type="button">Refresh</button></div>
+          <div class="heading"><div><h2>Staff accounts & roles</h2><p>Each staff member signs in with a separate email and password. Step 1: In Supabase Dashboard, open Authentication → Users → Add user and create an individual sign-in for each employee. Step 2: Return here, press Refresh, select the employee's job role and Save role. Only then can they access their department.</p><p class="muted">A staff account starts as Unassigned (read only). Assign Melting, Billet Transfer, Rolling, Sales, or Loading for department access. Staff cannot edit or delete saved records without Admin approval. Never share account passwords.</p><a class="open-supabase" href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer">Open Supabase to create staff login ↗</a></div><button id="refresh-users" class="outline" type="button">Refresh</button></div>
           <div class="panel"><div id="users-table" class="table-wrap"></div></div>
         </section>
         <section id="audit-view" class="screen" hidden>
-          <div class="heading"><div><h2>Audit trail</h2><p>Database events: who changed what and when.</p></div><button id="refresh-audit" class="outline" type="button">Refresh</button></div>
-          <div class="panel"><p class="muted">Audit Trail is an automatic history of saved changes. It tells management WHO added, updated, or deleted WHICH record, and WHEN. Click Details to inspect old and new values.</p><div id="audit-table" class="table-wrap"></div></div>
+          <div class="heading"><div><h2>Audit trail</h2><p>Activity history in plain English: who recorded, edited, or deleted information, and when.</p></div><button id="refresh-audit" class="outline" type="button">Refresh</button></div>
+          <div class="panel"><p class="muted">An automatic history of factory activities. Select View changes to see what information changed, in everyday language.</p><div id="audit-table" class="table-wrap"></div></div>
         </section>
       </main>
-      <footer>SteelOps · Architecture-first student project · Version 0.3</footer>
+      <footer>SteelOps · Architecture-first student project · Version 0.4</footer>
     </div>
   </div>
 

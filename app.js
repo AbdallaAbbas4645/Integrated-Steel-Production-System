@@ -81,6 +81,86 @@
       const summary=document.createElement("small");summary.textContent=m.summary;b.append(summary);list.append(b);
     });
   }
+  // English-only date/time calendar with digit-only manual entry. Inputs
+  // automatically format YYYY-MM-DD HH:MM; calendar allows fast selection.
+  // Avoid native datetime-local because its visible language follows OS settings.
+  const padDate=n=>String(n).padStart(2,"0");
+  const localDateText=d=>`${d.getFullYear()}-${padDate(d.getMonth()+1)}-${padDate(d.getDate())} ${padDate(d.getHours())}:${padDate(d.getMinutes())}`;
+  const monthNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const datePopup=document.createElement("dialog");
+  datePopup.id="english-calendar";datePopup.className="calendar-dialog";
+  datePopup.innerHTML=`<div class="calendar-header"><h3 id="cal-heading">Choose date &amp; time</h3><button class="outline small" type="button" id="cal-x" aria-label="Close date picker">✕</button></div>
+  <div class="calendar-controls"><button type="button" class="outline small" id="cal-prev" aria-label="Previous month">‹</button><strong id="cal-month"></strong><button type="button" class="outline small" id="cal-next" aria-label="Next month">›</button></div>
+  <div class="calendar-weekdays">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<span>${d}</span>`).join("")}</div>
+  <div id="cal-days" class="calendar-days"></div>
+  <div class="calendar-times"><label for="cal-hour">Hour (24h)<select id="cal-hour"></select></label><label for="cal-minute">Minute<select id="cal-minute"></select></label></div>
+  <div class="calendar-actions"><button type="button" class="outline small" id="cal-today">Today / Now</button><button type="button" class="outline small" id="cal-clear">Clear</button><button type="button" class="outline small" id="cal-cancel">Cancel</button><button type="button" class="primary" id="cal-apply">Use date</button></div>`;
+  document.body.append(datePopup);
+  const cal=id=>datePopup.querySelector("#"+id);
+  for(let h=0;h<24;h++){const opt=document.createElement("option");opt.value=padDate(h);opt.textContent=padDate(h);cal("cal-hour").append(opt);}
+  for(let m=0;m<60;m++){const opt=document.createElement("option");opt.value=padDate(m);opt.textContent=padDate(m);cal("cal-minute").append(opt);}
+  let calInput=null,calMonth=new Date(),calDay=1;
+  const nowLocal=()=>new Date();
+  function calendarRender(){
+    const year=calMonth.getFullYear(),month=calMonth.getMonth();
+    cal("cal-month").textContent=monthNames[month]+" "+year;
+    const box=cal("cal-days");box.replaceChildren();
+    for(let i=0;i<new Date(year,month,1).getDay();i++){
+      const blank=document.createElement("span");blank.className="calendar-empty";box.append(blank);
+    }
+    const days=new Date(year,month+1,0).getDate();
+    for(let day=1;day<=days;day++){
+      const b=document.createElement("button");b.type="button";b.className="calendar-day"+(calDay===day?" selected":"");
+      b.textContent=String(day);b.setAttribute("aria-label",`${day} ${monthNames[month]} ${year}`);
+      b.addEventListener("click",()=>{calDay=day;calendarRender();});box.append(b);
+    }
+  }
+  function openCalendar(input){
+    if(!input||input.disabled)return;
+    calInput=input;
+    const match=/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(input.value);
+    let d=match?new Date(+match[1],+match[2]-1,+match[3],+match[4],+match[5]):nowLocal();
+    if(Number.isNaN(d.getTime()))d=nowLocal();
+    calMonth=new Date(d.getFullYear(),d.getMonth(),1);calDay=d.getDate();
+    cal("cal-hour").value=padDate(d.getHours());cal("cal-minute").value=padDate(d.getMinutes());
+    calendarRender();datePopup.showModal();
+  }
+  const setCalendarNow=input=>{input.value=localDateText(nowLocal());input.dispatchEvent(new Event("change",{bubbles:true}));};
+  // This mask allows numeric typing but strips alphabetic characters and
+  // generates the date/time punctuation automatically.
+  function digitDateMask(value){
+    const d=String(value).replace(/[^0-9]/g,"").slice(0,12);
+    let text=d.slice(0,4);
+    if(d.length>4)text+="-"+d.slice(4,6);
+    if(d.length>6)text+="-"+d.slice(6,8);
+    if(d.length>8)text+=" "+d.slice(8,10);
+    if(d.length>10)text+=":"+d.slice(10,12);
+    return text;
+  }
+  function addDateTools(input){
+    input.type="text";input.readOnly=false;input.inputMode="numeric";
+    input.maxLength=16;input.pattern="[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}";
+    input.placeholder="YYYY-MM-DD HH:MM";input.lang="en-US";input.dir="ltr";
+    input.classList.add("date-entry");input.title="Type numbers only, or choose Calendar / Today";
+    const wrap=document.createElement("div");wrap.className="date-input-row";
+    input.parentNode.insertBefore(wrap,input);wrap.append(input);
+    const open=button("📅","outline date-trigger",()=>openCalendar(input));open.title="Open calendar";open.setAttribute("aria-label","Choose date and time");
+    const today=button("Today / Now","outline date-today",()=>setCalendarNow(input));
+    wrap.append(open,today);
+    input.addEventListener("input",()=>{if(input.classList.contains("date-entry"))input.value=digitDateMask(input.value);});
+  }
+  cal("cal-x").addEventListener("click",()=>datePopup.close());
+  cal("cal-cancel").addEventListener("click",()=>datePopup.close());
+  cal("cal-prev").addEventListener("click",()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1);calDay=Math.min(calDay,new Date(calMonth.getFullYear(),calMonth.getMonth()+1,0).getDate());calendarRender();});
+  cal("cal-next").addEventListener("click",()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+1,1);calDay=Math.min(calDay,new Date(calMonth.getFullYear(),calMonth.getMonth()+1,0).getDate());calendarRender();});
+  cal("cal-today").addEventListener("click",()=>{const d=nowLocal();calMonth=new Date(d.getFullYear(),d.getMonth(),1);calDay=d.getDate();cal("cal-hour").value=padDate(d.getHours());cal("cal-minute").value=padDate(d.getMinutes());calendarRender();});
+  cal("cal-clear").addEventListener("click",()=>{if(calInput){calInput.value="";calInput.dispatchEvent(new Event("change",{bubbles:true}));}datePopup.close();});
+  cal("cal-apply").addEventListener("click",()=>{
+    if(!calInput)return;
+    const d=new Date(calMonth.getFullYear(),calMonth.getMonth(),calDay,+cal("cal-hour").value,+cal("cal-minute").value);
+    calInput.value=localDateText(d);calInput.dispatchEvent(new Event("change",{bubbles:true}));datePopup.close();
+  });
+
   async function makeField(f,prefix="f"){
     const box=document.createElement("div");box.className="field";
     const label=document.createElement("label");label.textContent=f.label;label.htmlFor=prefix+"-"+f.key;box.append(label);
@@ -96,14 +176,12 @@
       el=document.createElement("input");
       el.type=f.type==="datetime-local"?"text":f.type;
       el.autocomplete="off";
-      if(f.type==="datetime-local"){
-        el.placeholder="YYYY-MM-DD HH:MM";el.pattern="[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}";
-        el.title="24-hour English date: YYYY-MM-DD HH:MM";el.inputMode="numeric";el.lang="en-US";el.dir="ltr";
-      }
       if(f.type==="number"){el.step="any";el.min=f.key==="price_per_ton"?"0":"0.01";}
     }
     el.id=prefix+"-"+f.key;el.name=f.key;el.required=f.required;
-    box.append(el);return box;
+    box.append(el);
+    if(f.type==="datetime-local")addDateTools(el);
+    return box;
   }
   async function renderForm(table){
     const config=modules[table];$("module-title").textContent=config.title;$("module-subtitle").textContent=config.summary;
@@ -198,11 +276,28 @@
     modules[table].fields.filter(f=>!["heats","sales_orders","customers"].includes(f.type)).forEach(f=>{
       const option=document.createElement("option");option.value=f.key;option.textContent=f.label;options.append(option);
     });
-    $("change-value").value="";$("change-reason").value="";
+    configureChangeValue();$("change-reason").value="";
     $("change-dialog").showModal();
   }
   $("close-dialog").addEventListener("click",()=>$("change-dialog").close());
   $("cancel-change").addEventListener("click",()=>$("change-dialog").close());
+  function configureChangeValue(){
+    const field=$("change-field").value,input=$("change-value");
+    const date=timeFields.has(field);
+    if(date){
+      if(!input.closest(".date-input-row"))addDateTools(input);
+      input.required=true;input.placeholder="YYYY-MM-DD HH:MM";
+    }else{
+      const row=input.closest(".date-input-row");
+      if(row){row.parentNode.insertBefore(input,row);row.remove();}
+      input.readOnly=false;input.pattern="";input.maxLength=524288;input.type=numberFields.has(field)?"number":"text";
+      input.inputMode=numberFields.has(field)?"decimal":"text";
+      input.classList.remove("date-entry");
+      input.placeholder="Enter new value";
+    }
+    input.value="";
+  }
+  $("change-field").addEventListener("change",configureChangeValue);
   $("change-form").addEventListener("submit",async event=>{
     event.preventDefault();if(!state.change||!state.session)return;
     const {table,row,action}=state.change;
@@ -266,23 +361,87 @@
       tableInto("users-table",["Account","Full name","Role","Active","Action"],rows);
     }catch(err){notice("Failed to load staff accounts: "+err.message,true);}
   }
+  // Human-friendly audit history: no UUIDs, table names, column codes, or JSON.
+  const auditVerbs={INSERT:"Added",UPDATE:"Updated",DELETE:"Deleted"};
+  const auditLabels={status:"Status",notes:"Notes",created_at:"Created on",updated_at:"Last updated"};
+  const skippedAuditFields=new Set(["id","user_id","created_by","created_at","updated_at","reviewed_by","actor_id"]);
+  const entityLabels={
+    heats:"heat",transfers:"billet transfer",rolling_batches:"rolling batch",
+    customers:"customer",sales_orders:"sales order",loading_events:"loading record",
+    change_requests:"change request",profiles:"staff account"
+  };
+  function auditFieldLabel(table,key){
+    return modules[table]?.fields.find(f=>f.key===key)?.label || auditLabels[key] ||
+      ({heat_id:"Related heat",order_id:"Sales order",customer_id:"Customer",full_name:"Employee name",role:"Job role",is_active:"Account active",email:"Email",request_type:"Request",reason:"Reason",admin_note:"Manager's note",payment_terms:"Payment option"})[key] || "";
+  }
+  function auditRecordName(table,oldRow,newRow){
+    const obj=newRow||oldRow||{};
+    const name=obj.heat_number||obj.order_no||obj.name||obj.truck_plate||obj.full_name;
+    return name?`${entityLabels[table]||"entry"} ${String(name)}`:entityLabels[table]||"factory record";
+  }
+  function humanAuditValue(table,key,value,lookups={}){
+    if(value===null||value===undefined||value==="")return "Not provided";
+    if(typeof value==="boolean")return value?"Yes":"No";
+    if(["heat_id","customer_id","order_id"].includes(key))return lookups[key]?.get(String(value))||"Related factory record";
+    if(timeFields.has(key)||key.endsWith("_at"))return displayFactoryTime(value);
+    if(key==="role")return roles[value]||String(value);
+    if(typeof value==="object")return "Updated information";
+    if(key==="furnace")return "Furnace "+value;
+    return String(value);
+  }
+  function friendlyAuditDetails(table,action,previous,current,lookups){
+    const oldRow=previous||{},newRow=current||{};
+    const relevant=action==="INSERT"?newRow:action==="DELETE"?oldRow:newRow;
+    const fields=Object.keys(relevant).filter(key=>!skippedAuditFields.has(key)&&auditFieldLabel(table,key));
+    if(action==="UPDATE"){
+      const changed=fields.filter(key=>JSON.stringify(oldRow[key])!==JSON.stringify(newRow[key]));
+      return changed.map(key=>({label:auditFieldLabel(table,key),before:humanAuditValue(table,key,oldRow[key],lookups),after:humanAuditValue(table,key,newRow[key],lookups)}));
+    }
+    return fields.map(key=>({label:auditFieldLabel(table,key),value:humanAuditValue(table,key,relevant[key],lookups)}));
+  }
   async function loadAudit(){
     if(!["admin","management"].includes(state.profile?.role))return;
     try{
-      const [events,profiles]=await Promise.all([repo.fetch("audit_log",100),repo.fetch("profiles",250)]);
-      const names=new Map(profiles.map(p=>[p.user_id,`${p.full_name || "Staff"} (${p.email})`]));
-      const labels={INSERT:"Added",UPDATE:"Updated",DELETE:"Deleted"};
+      const [events,profiles,heats,customers,orders]=await Promise.all([
+        repo.fetch("audit_log",100),repo.fetch("profiles",250),
+        repo.fetch("heats",250),repo.fetch("customers",250),repo.fetch("sales_orders",250)
+      ]);
+      const names=new Map(profiles.map(p=>[p.user_id,p.full_name||p.email||"Staff member"]));
+      const lookups={
+        heat_id:new Map(heats.map(h=>[String(h.id),h.heat_number||"Heat record"])),
+        customer_id:new Map(customers.map(c=>[String(c.id),c.name||"Customer"])),
+        order_id:new Map(orders.map(o=>[String(o.id),o.order_no||"Sales order"]))
+      };
       const rows=events.map(r=>{
         const tr=document.createElement("tr");
-        const person=r.actor_id?(names.get(r.actor_id)||"User "+String(r.actor_id).slice(0,8)+"…"):"System";
-        [labels[r.action]||r.action,modules[r.table_name]?.title||r.table_name,"#"+r.record_id,person,fmt(r.created_at,"created_at")].forEach(v=>tr.append(cell(v)));
-        const td=document.createElement("td"),details=document.createElement("details"),sum=document.createElement("summary");
-        sum.textContent="Details";details.append(sum);
-        const content=document.createElement("pre");content.className="audit-details";
-        content.textContent="Before:\n"+JSON.stringify(r.old_data,null,2)+"\n\nAfter:\n"+JSON.stringify(r.new_data,null,2);
-        details.append(content);td.append(details);tr.append(td);return tr;
+        const who=r.actor_id?(names.get(r.actor_id)||"Factory staff member"):"System";
+        const thing=auditRecordName(r.table_name,r.old_data,r.new_data);
+        let sentence=(auditVerbs[r.action]||"Changed")+" "+thing;
+        if(r.table_name==="change_requests"){
+          if(r.action==="INSERT")sentence="Submitted a change request";
+          else if(r.action==="UPDATE"&&r.old_data?.status!==r.new_data?.status){
+            sentence=r.new_data?.status==="approved"?"Approved a change request":r.new_data?.status==="rejected"?"Rejected a change request":"Updated a change request";
+          }
+        }
+        tr.append(cell(sentence),cell(who),cell(fmt(r.created_at,"created_at")));
+        const td=document.createElement("td");
+        const details=document.createElement("details"),summary=document.createElement("summary");
+        summary.textContent="View changes";details.append(summary);
+        const lines=friendlyAuditDetails(r.table_name,r.action,r.old_data,r.new_data,lookups);
+        if(!lines.length){const p=document.createElement("p");p.className="muted";p.textContent="Activity recorded successfully.";details.append(p);}
+        else{
+          const list=document.createElement("div");list.className="audit-friendly-list";
+          lines.forEach(line=>{
+            const item=document.createElement("div");item.className="audit-friendly-item";
+            const label=document.createElement("strong");label.textContent=line.label;item.append(label);
+            const value=document.createElement("span");
+            value.textContent="value" in line?line.value:`${line.before} → ${line.after}`;
+            item.append(value);list.append(item);
+          });details.append(list);
+        }
+        td.append(details);tr.append(td);return tr;
       });
-      tableInto("audit-table",["Action","Department","Record","Performed by","Date & time","Changes"],rows);
+      tableInto("audit-table",["What happened","Employee","Date and time","Information"],rows);
     }catch(err){notice("Audit unavailable: "+err.message,true);}
   }
   async function enterSession(session){

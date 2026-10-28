@@ -11,3 +11,30 @@
 input[placeholder="YYYY-MM-DD HH:MM"]{direction:ltr;text-align:left;font-variant-numeric:tabular-nums;letter-spacing:.3px}
 .audit-details{max-width:440px;max-height:310px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;direction:ltr;background:#0d1d2f;padding:10px;border-radius:8px;color:#d7eaf9}
 @media(max-width:700px){.wide-dialog .fields{grid-template-columns:1fr}}
+
+/* V0.4 — English-only numeric calendar and friendly activity history */
+.date-input-row{display:flex;gap:6px;align-items:center;min-width:0}
+.date-input-row .date-entry{flex:1 1 140px;width:0;min-width:0;cursor:pointer;letter-spacing:.4px;font-variant-numeric:tabular-nums}
+.date-input-row .date-trigger{flex:0 0 45px;font-size:1.1rem;padding:9px}
+.date-input-row .date-today{flex:0 0 auto;font-size:.78rem;padding:10px 8px;white-space:nowrap}
+.calendar-dialog{width:min(450px,96vw);max-height:90vh;overflow:auto}
+.calendar-header,.calendar-controls,.calendar-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.calendar-header h3{margin:0}.calendar-controls{margin:16px 0}
+.calendar-controls strong{font-size:1.05rem}
+.calendar-weekdays,.calendar-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center}
+.calendar-weekdays span{color:var(--muted);font-size:.78rem;font-weight:700;padding:7px 0}
+.calendar-day{border:1px solid var(--line);color:var(--text);background:#0d2032;border-radius:8px;min-height:39px}
+.calendar-day:hover,.calendar-day.selected{background:var(--blue);color:#041724;border-color:var(--blue);font-weight:800}
+.calendar-times{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.calendar-times label{margin:0}.calendar-times select{margin-top:5px;direction:ltr}
+.calendar-actions{margin-top:18px;flex-wrap:wrap}
+.audit-friendly-list{min-width:220px;max-width:400px;white-space:normal;margin-top:9px}
+.audit-friendly-item{padding:7px 3px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.audit-friendly-item strong{font-size:.8rem;color:var(--muted)}
+.audit-friendly-item span{font-size:.87rem;color:var(--text);overflow-wrap:anywhere;white-space:normal}
+#audit-table td{white-space:normal;min-width:110px}
+#audit-table td:first-child{min-width:210px}
+@media(max-width:640px){.date-input-row{flex-wrap:wrap}.date-input-row .date-entry{flex-basis:100%;width:100%}.date-input-row .date-trigger{flex-basis:55px}}
+
+.open-supabase{display:inline-block;margin:12px 0 0;padding:10px 13px;border:1px solid var(--blue);border-radius:9px;color:var(--blue);text-decoration:none;font-weight:700}
+.open-supabase:hover{background:#17374a}
