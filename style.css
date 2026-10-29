@@ -41,3 +41,8 @@ input[placeholder="YYYY-MM-DD HH:MM"]{direction:ltr;text-align:left;font-variant
 
 /* v0.5 production schedule */
 .schedule-panel{margin-top:1rem}.schedule-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem;margin:1.25rem 0}.schedule-inputs label{display:flex;flex-direction:column;gap:.45rem}.schedule-inputs input{width:100%;color-scheme:dark}.schedule-actions{display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:1rem}.schedule-panel .table-wrap{overflow-x:auto}.schedule-panel table{min-width:920px}
+
+/* V0.6 workflow cards */
+.workflow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:14px;margin-top:14px}
+.workflow-card{padding:16px;background:#14243a;border:1px solid #2b425d;border-radius:12px;min-width:0}
+.workflow-card h4{margin:0 0 8px}.workflow-detail p{font-size:.87rem;line-height:1.65}.stage-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}

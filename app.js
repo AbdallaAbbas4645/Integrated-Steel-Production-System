@@ -38,7 +38,6 @@
     const items=[{id:"overview",title:"Overview",icon:"◫"}];
     Object.entries(modules).forEach(([id,m])=>{if(allowed(id))items.push({id,title:m.title,icon:m.icon});});
     if(state.profile?.role!=="viewer")items.push({id:"requests",title:"Change Requests",icon:"📝"});
-    if(["admin","management","melting","billet_transport","rolling"].includes(state.profile?.role))items.push({id:"schedule",title:"Production Schedule",icon:"📅"});
     if(admin())items.push({id:"users",title:"Staff & Roles",icon:"🛡️"});
     if(["admin","management"].includes(state.profile?.role))items.push({id:"audit",title:"Audit Trail",icon:"📜"});
     return items;
@@ -51,7 +50,7 @@
   }
   function navigate(view){
     state.active=view;state.table=modules[view]?view:null;
-    ["overview","records","requests","users","audit","schedule"].forEach(v=>$(v+"-view").hidden=true);
+    ["overview","records","requests","users","audit"].forEach(v=>$(v+"-view").hidden=true);
     const screen=state.table?"records":view;
     $(screen+"-view").hidden=false;
     $("current-title").textContent=state.table?modules[view].title:({overview:"Overview",requests:"Change Requests",users:"Staff & Roles",audit:"Audit Trail",schedule:"Production Schedule"}[view]);
@@ -62,7 +61,7 @@
     else if(view==="requests")loadRequests();
     else if(view==="users")loadUsers();
     else if(view==="audit")loadAudit();
-    else if(view==="schedule")calculateSchedule();
+    
   }
   async function loadOverview(){
     const cards=$("overview-metrics");cards.replaceChildren();
@@ -169,9 +168,10 @@
     let el;
     if(f.type==="select"||["heats","customers","sales_orders"].includes(f.type)){
       el=document.createElement("select");
-      const options=f.options||await repo.fetch(f.type,120).then(rows=>rows.map(r=>[
-        String(r.id),f.type==="heats"?r.heat_number:f.type==="customers"?r.name:r.order_no
-      ]));
+      const options=f.options||await repo.fetch(f.type,120).then(rows=>{
+        if(f.type==="heats" && state.table==="transfers")rows=rows.filter(h=>Boolean(h.ready_for_transfer_at));
+        return rows.map(r=>[String(r.id),f.type==="heats"?r.heat_number:f.type==="customers"?r.name:r.order_no]);
+      });
       if(!options.length){const opt=document.createElement("option");opt.value="";opt.textContent="Create the related record first";el.append(opt);}
       options.forEach(([val,text])=>{const opt=document.createElement("option");opt.value=val;opt.textContent=text;el.append(opt);});
     }else{
@@ -190,6 +190,8 @@
     $("create-title").textContent="Register new "+config.title.toLowerCase();
     const show=canCreate(table);$("create-panel").hidden=!show;
     if(!show)return;
+    if(table==="heats"){renderHeatForm();return;}
+    $("record-save").textContent="Save record";$("create-title").textContent="Register new "+config.title.toLowerCase();
     const fields=$("record-fields");fields.replaceChildren();
     for(const f of config.fields){fields.append(await makeField(f));}
     $("record-save").disabled=false;
@@ -213,6 +215,10 @@
         actions.append(area);tr.append(actions);return tr;
       });
       tableInto("records-table",["ID",...m.list.map(k=>m.fields.find(f=>f.key===k)?.label||k),"Actions"],rows);
+      $("heat-workflow-panel").hidden=table!=="heats";
+      if(table==="heats")await renderHeatWorkflow();
+      $("transfer-queue-panel").hidden=table!=="transfers";
+      if(table==="transfers")await renderTransferQueue();
     }catch(err){notice("Failed to load records: "+err.message,true);}
   }
   $("record-form").addEventListener("submit",async(event)=>{
@@ -220,10 +226,18 @@
     const submit=$("record-save");submit.disabled=true;
     try{
       const values=Object.fromEntries(new FormData(event.target));
-      const record=new SteelRecord(table,values);
-      await repo.insert(table,record.toJSON());
+      let payload;
+      if(table==="heats"){
+        const number=values.heat_number?.trim();const weight=Number(normDigits(values.weight_tons));
+        if(!number || !Number.isFinite(weight)||weight<=0)throw new Error("Enter a valid heat number and weight.");
+        const started=new Date().toISOString();
+        payload={heat_number:number,furnace:values.furnace,weight_tons:weight,start_time:started,workflow_started_at:started,status:"Melting in progress",notes:values.notes||null};
+      }else{
+        const record=new SteelRecord(table,values);payload=record.toJSON();
+      }
+      await repo.insert(table,payload);
       event.target.reset();notice("Record saved successfully in Supabase.");await loadRecords();
-    }catch(err){notice("Save failed: "+err.message,true);}finally{submit.disabled=false;}
+    }catch(err){notice(err.code==="23505"?"Heat number already exists. Choose a different number.":"Save failed: "+err.message,true);}finally{submit.disabled=false;}
   });
   // Admin direct-edit form; never require typing column names or prompt() values.
   async function openAdminEditor(table,row){
@@ -447,44 +461,101 @@
     }catch(err){notice("Audit unavailable: "+err.message,true);}
   }
 
-  // Read-only production planning: assumptions are explicit and never persisted.
-  function calculateSchedule(){
-    const result=$("schedule-results"),msg=$("schedule-message");
-    const input=$("schedule-start").value;
-    const start=new Date(input);
-    const count=Number($("schedule-count").value);
-    if(!input || !Number.isFinite(start.getTime())){msg.textContent="Select a valid Furnace A start time.";result.replaceChildren();return;}
-    if(!Number.isInteger(count)||count<1||count>12){msg.textContent="Enter 1–12 heats per furnace.";result.replaceChildren();return;}
-    const actual=$("schedule-cast-end").value;
-    const actualDate=actual?new Date(actual):null;
-    if(actualDate && (!Number.isFinite(actualDate.getTime()) || actualDate.getTime()<start.getTime())){
-      msg.textContent="Actual casting end must be a valid time after Furnace A starts.";return;
-    }
-    const plus=(date,min)=>new Date(date.getTime()+min*60000);
-    const stamp=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-    let rows=[];
-    for(let n=0;n<count;n++)for(const furnace of ["A","B"]){
-      const begin=plus(start,n*210+(furnace==="B"?60:0));
-      const marker=plus(begin,210);
-      const source=n===0&&furnace==="A"&&actualDate?actualDate:marker;
-      const rolling=plus(source,150),finish=plus(rolling,70);
-      const tr=document.createElement("tr");
-      [furnace,n+1,stamp(begin),stamp(marker),source===actualDate?"Actual end":"Estimated CCM marker",stamp(rolling),stamp(finish)].forEach(v=>tr.append(cell(v)));
-      rows.push(tr);
-    }
-    rows.sort((a,b)=>a.children[2].textContent.localeCompare(b.children[2].textContent));
-    tableInto("schedule-results",["Furnace","Heat #","Cycle start","CCM marker (+210m)","Basis","Rolling entry (+150m)","Rebar exit (+70m)"],rows);
-    msg.textContent=`Showing ${rows.length} planning rows. The 150-minute period is not necessarily transport driving time.`;
+  // Workflow expectations: combined melting+casting cycle = 210 min.
+  // Standalone melting/casting durations are not known and are not invented.
+  const stageNames={melting:"Melting in progress",melting_done:"Melting completed",casting:"Casting in progress",ready:"Ready for Transfer"};
+  const addMinutes=(iso,n)=>new Date(new Date(iso).getTime()+n*60000);
+  function expectedStatus(actual,forecast){
+    if(!actual||!forecast)return "";
+    const delta=Math.round((new Date(actual)-new Date(forecast))/60000);
+    if(delta===0)return "On time";
+    return delta>0?`Delayed by ${delta} minutes`:`Completed ${Math.abs(delta)} minutes early`;
   }
-  $("schedule-now").addEventListener("click",()=>{
-    const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
-    $("schedule-start").value=d.toISOString().slice(0,16);calculateSchedule();
-  });
-  $("schedule-calculate").addEventListener("click",calculateSchedule);
-  $("schedule-start").addEventListener("change",calculateSchedule);
-  $("schedule-count").addEventListener("change",calculateSchedule);
-  $("schedule-cast-end").addEventListener("change",calculateSchedule);
-
+  function workflowText(row){
+    const box=document.createElement("div");box.className="workflow-detail";
+    const stage=row.casting_ended_at?"ready":row.casting_started_at?"casting":row.melting_ended_at?"melting_done":"melting";
+    const title=document.createElement("strong");title.textContent=stageNames[stage];box.append(title);
+    const lines=[];
+    if(!row.workflow_started_at)lines.push("Historical record — stage timestamps not available.");
+    if(row.start_time)lines.push(`Melting started: ${displayFactoryTime(row.start_time)}`);
+    if(row.melting_ended_at)lines.push(`Melting ended: ${displayFactoryTime(row.melting_ended_at)}`);
+    if(row.casting_started_at)lines.push(`Casting started: ${displayFactoryTime(row.casting_started_at)}`);
+    if(row.casting_ended_at)lines.push(`Casting ended: ${displayFactoryTime(row.casting_ended_at)}`);
+    if(row.start_time && row.workflow_started_at){
+      const prediction=addMinutes(row.start_time,210);
+      if(row.casting_ended_at)lines.push(`Planned combined-cycle marker: ${displayFactoryTime(prediction.toISOString())} — ${expectedStatus(row.casting_ended_at,prediction)}`);
+      else lines.push(`Expected combined melting/casting cycle marker: ${displayFactoryTime(prediction.toISOString())} (not a fixed deadline for either stage alone)`);
+    }
+    if(row.casting_ended_at)lines.push(`Expected rolling entry: ${displayFactoryTime(addMinutes(row.casting_ended_at,150).toISOString())}`);
+    const p=document.createElement("p");p.className="muted";p.textContent=lines.join(" · ");box.append(p);
+    return box;
+  }
+  async function executeStage(row,action){
+    const names={end_melting:"End Melting",start_casting:"Start Casting",end_casting:"End Casting"};
+    if(!window.confirm(`${names[action]} for heat ${row.heat_number}? Current time will be recorded permanently.`))return;
+    try{
+      const {error}=await client.rpc("record_heat_stage",{p_heat_id:row.id,p_action:action});
+      if(error)throw error;
+      await loadRecords();notice(`${names[action]} recorded at current time. ${action==='end_casting'?'Heat is ready for transfer.':''}`);
+    }catch(err){notice("Could not record stage: "+err.message,true);}
+  }
+  function stageButtons(row){
+    const div=document.createElement("div");div.className="stage-actions";
+    if(!canCreate("heats"))return div;
+    if(!row.workflow_started_at){div.textContent="Legacy record — use Request Edit to correct it.";return div;}
+    let action;
+    if(!row.melting_ended_at)action="end_melting";
+    else if(!row.casting_started_at)action="start_casting";
+    else if(!row.casting_ended_at)action="end_casting";
+    if(action){
+      const names={end_melting:"End Melting",start_casting:"Start Casting",end_casting:"End Casting"};
+      div.append(button(names[action],"primary small",()=>executeStage(row,action)));
+    }
+    return div;
+  }
+  async function renderTransferQueue(){
+    const box=$("transfer-queue");if(!box)return;box.replaceChildren();
+    try{
+      const [heats,transfers]=await Promise.all([repo.fetch("heats",120),repo.fetch("transfers",120)]);
+      const transferred=new Set(transfers.map(t=>String(t.heat_id)));
+      const ready=heats.filter(h=>h.casting_ended_at&&!transferred.has(String(h.id)));
+      for(const h of ready){
+        const card=document.createElement("div");card.className="workflow-card";
+        const strong=document.createElement("strong");strong.textContent=`${h.heat_number} · Furnace ${h.furnace} · ${h.weight_tons} tons`;
+        const caption=document.createElement("p");caption.textContent=`Casting finished ${displayFactoryTime(h.casting_ended_at)} · Expected rolling entry ${displayFactoryTime(addMinutes(h.casting_ended_at,150).toISOString())}`;
+        card.append(strong,caption);box.append(card);
+      }
+      if(!ready.length)box.textContent="No new heats ready for transfer.";
+    }catch(err){box.textContent="Transfer queue unavailable: "+err.message;}
+  }
+  async function renderHeatWorkflow(){
+    const box=$("heat-workflow");if(!box)return;
+    box.replaceChildren();
+    try{
+      const rows=await repo.fetch("heats",120);
+      for(const row of rows){
+        const card=document.createElement("div");card.className="workflow-card";
+        const heading=document.createElement("h4");heading.textContent=`${row.heat_number} · Furnace ${row.furnace} · ${row.weight_tons} t`;
+        card.append(heading,workflowText(row),stageButtons(row));box.append(card);
+      }
+      if(!rows.length)box.textContent="No heats yet. Start melting to create a new heat.";
+    }catch(err){box.textContent="Unable to load heat stages: "+err.message;}
+  }
+  function renderHeatForm(){
+    const form=$("record-form"),fields=$("record-fields");fields.replaceChildren();
+    const required=[{key:"heat_number",label:"Heat number",type:"text"},{key:"furnace",label:"Furnace",type:"select",options:[["A","Furnace A"],["B","Furnace B"]]},{key:"weight_tons",label:"Heat weight (tons)",type:"number"},{key:"notes",label:"Notes",type:"text",required:false}];
+    for(const f of required){
+      const wrap=document.createElement("div");wrap.className="field";
+      const label=document.createElement("label");label.textContent=f.label;label.htmlFor="f-"+f.key;
+      let input;if(f.type==="select"){
+        input=document.createElement("select");for(const [val,txt] of f.options){const opt=document.createElement("option");opt.value=val;opt.textContent=txt;input.append(opt);}
+      }else{input=document.createElement("input");input.type=f.type;if(f.type==="number"){input.min="0.01";input.step="any";}}
+      input.id="f-"+f.key;input.name=f.key;input.required=f.required!==false;wrap.append(label,input);fields.append(wrap);
+    }
+    $("create-title").textContent="Start Melting";
+    $("record-save").textContent="Start Melting & Save";
+  }
+  function normDigits(s){return String(s).replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632)).replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-1776));}
   async function enterSession(session){
     if(!session){state.session=null;state.profile=null;$("app-shell").hidden=true;$("login-screen").hidden=false;return;}
     try{
