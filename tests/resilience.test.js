@@ -1,0 +1,10 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const {resilientRead,transientReadError,ReadTimeoutError,WorkflowService,EventBus}=require('../architecture.js');
+test('resilient reads retry temporary network errors and succeed',async()=>{let n=0;const d=await resilientRead(async()=>{if(n++<2)throw new Error('Failed to fetch');return 'ok';},{retries:2,delayMs:0,sleep:async()=>{}});assert.equal(d,'ok');assert.equal(n,3);});
+test('non-transient authorization failures are not retried',async()=>{let n=0;await assert.rejects(resilientRead(async()=>{n++;throw Object.assign(new Error('Forbidden'),{status:403});},{sleep:async()=>{}}),/Forbidden/);assert.equal(n,1);});
+test('read timeout stops after bounded retries',async()=>{let n=0;await assert.rejects(resilientRead(()=>{n++;return new Promise(()=>{});},{timeoutMs:8,retries:1,delayMs:0,sleep:async()=>{},label:'slow read'}),ReadTimeoutError);assert.equal(n,2);});
+test('server-side errors can be retried as reads',()=>{assert.equal(transientReadError({status:503}),true);assert.equal(transientReadError({status:401}),false);});
+test('write commands are never automatically retried',async()=>{let attempts=0;const service=new WorkflowService({execute:async()=>{attempts++;throw new Error('Lost response');}},new EventBus());await assert.rejects(service.run('dispatch',1,{tons:1,truck_plate:'TEST'}));assert.equal(attempts,1);});
+test('event emitted only after successful write',async()=>{const bus=new EventBus();let fired=0;bus.on('workflow.saved',()=>fired++);const service=new WorkflowService({execute:async()=>({ok:true})},bus);await service.run('transfer_start',1);assert.equal(fired,1);});
