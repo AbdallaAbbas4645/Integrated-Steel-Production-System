@@ -44,6 +44,22 @@
           <div id="overview-metrics" class="metrics"></div>
           <div class="panel"><h3>Your access</h3><div id="overview-modules" class="module-grid"></div></div>
         </section>
+        <section id="schedule-view" class="screen" hidden>
+ <div class="heading"><div><h2>Production Schedule</h2><p>Planning estimates for Furnace A and Furnace B, including billet waiting and rolling.</p></div></div>
+ <div class="panel schedule-panel">
+  <p class="muted">Planning model: 210 minutes per melting/casting cycle; Furnace B begins 60 minutes after A; each furnace repeats every 210 minutes. Casting and CCM cooling times are <strong>not independently confirmed</strong>.</p>
+  <div class="schedule-inputs">
+   <label>Furnace A start <input id="schedule-start" type="datetime-local" step="60"></label>
+   <label>Heats per furnace <input id="schedule-count" type="number" min="1" max="12" value="4"></label>
+   <label>Optional actual casting end (first Furnace A heat)<input id="schedule-cast-end" type="datetime-local" step="60"></label>
+  </div>
+  <div class="schedule-actions"><button class="primary" id="schedule-calculate" type="button">Calculate schedule</button><button class="outline" id="schedule-now" type="button">Use current time</button></div>
+  <p id="schedule-message" class="muted" role="status"></p>
+  <div id="schedule-results" class="table-wrap"></div>
+  <p class="muted"><strong>Important:</strong> The calculated CCM event is a planning marker at cycle end, not a verified casting completion time. If an actual casting end is entered, the 150-minute wait is measured from that time for the first A heat only. Other rows remain theoretical. No records are written to the database by this calculator.</p>
+ </div>
+</section>
+
         <section id="records-view" class="screen" hidden>
           <div class="heading"><div><h2 id="module-title">Operations</h2><p id="module-subtitle">Create and review operational records</p></div><button id="refresh-records" class="outline" type="button">Refresh</button></div>
           <div class="record-layout">
@@ -68,7 +84,7 @@
           <div class="panel"><p class="muted">An automatic history of factory activities. Select View changes to see what information changed, in everyday language.</p><div id="audit-table" class="table-wrap"></div></div>
         </section>
       </main>
-      <footer>SteelOps · Architecture-first student project · Version 0.4</footer>
+      <footer>SteelOps · Architecture-first student project · Version 0.5</footer>
     </div>
   </div>
 

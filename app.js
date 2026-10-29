@@ -2,7 +2,7 @@
 (() => {
   const cfg=window.STEEL_CONFIG||{};
   const $=id=>document.getElementById(id);
-  const {roles,modules,SteelRecord,transformChangeValue,timeFields,displayFactoryTime}=window.SteelDomain;
+  const {roles,modules,SteelRecord,transformChangeValue,numberFields,timeFields,displayFactoryTime}=window.SteelDomain;
   const state={session:null,profile:null,active:"overview",records:[],table:null,change:null,adminEdit:null,loading:false};
   const isConfigured=cfg.url?.startsWith("https://") && cfg.url.includes(".supabase.co") &&
     cfg.publishableKey?.startsWith("sb_publishable_");
@@ -38,6 +38,7 @@
     const items=[{id:"overview",title:"Overview",icon:"◫"}];
     Object.entries(modules).forEach(([id,m])=>{if(allowed(id))items.push({id,title:m.title,icon:m.icon});});
     if(state.profile?.role!=="viewer")items.push({id:"requests",title:"Change Requests",icon:"📝"});
+    if(["admin","management","melting","billet_transport","rolling"].includes(state.profile?.role))items.push({id:"schedule",title:"Production Schedule",icon:"📅"});
     if(admin())items.push({id:"users",title:"Staff & Roles",icon:"🛡️"});
     if(["admin","management"].includes(state.profile?.role))items.push({id:"audit",title:"Audit Trail",icon:"📜"});
     return items;
@@ -50,10 +51,10 @@
   }
   function navigate(view){
     state.active=view;state.table=modules[view]?view:null;
-    ["overview","records","requests","users","audit"].forEach(v=>$(v+"-view").hidden=true);
+    ["overview","records","requests","users","audit","schedule"].forEach(v=>$(v+"-view").hidden=true);
     const screen=state.table?"records":view;
     $(screen+"-view").hidden=false;
-    $("current-title").textContent=state.table?modules[view].title:({overview:"Overview",requests:"Change Requests",users:"Staff & Roles",audit:"Audit Trail"}[view]);
+    $("current-title").textContent=state.table?modules[view].title:({overview:"Overview",requests:"Change Requests",users:"Staff & Roles",audit:"Audit Trail",schedule:"Production Schedule"}[view]);
     buildNavigation();$("global-message").textContent="";
     $("sidebar").classList.remove("open");
     if(state.table)loadRecords();
@@ -61,6 +62,7 @@
     else if(view==="requests")loadRequests();
     else if(view==="users")loadUsers();
     else if(view==="audit")loadAudit();
+    else if(view==="schedule")calculateSchedule();
   }
   async function loadOverview(){
     const cards=$("overview-metrics");cards.replaceChildren();
@@ -312,7 +314,7 @@
       }
       await repo.requestChange({target_table:table,record_id:row.id,request_type:action,
         requested_changes:changes,reason,requested_by:state.session.user.id});
-      $("change-dialog").close();notice("Request sent to Admin. No source data was changed.");
+      $("change-dialog").close();state.change=null;navigate("requests");notice("Request sent to Admin. No source data was changed. Check Pending below.");
     }catch(err){notice("Request failed: "+err.message,true);}
   });
   async function loadRequests(){
@@ -320,7 +322,7 @@
       const requests=await repo.fetch("change_requests");
       const rows=requests.map(r=>{
         const tr=document.createElement("tr");
-        [r.id,r.target_table+" #"+r.record_id,r.request_type,r.reason,fmt(r.requested_at,"created_at")].forEach(v=>tr.append(cell(v)));
+        [r.id,(modules[r.target_table]?.title||"Record")+" #"+r.record_id,r.request_type,r.reason,fmt(r.requested_at,"created_at")].forEach(v=>tr.append(cell(v)));
         const status=cell(r.status);status.className="tag "+r.status;tr.append(status);
         const actions=document.createElement("td"),area=document.createElement("div");area.className="actions";
         if(admin()&&r.status==="pending"){
@@ -444,6 +446,45 @@
       tableInto("audit-table",["What happened","Employee","Date and time","Information"],rows);
     }catch(err){notice("Audit unavailable: "+err.message,true);}
   }
+
+  // Read-only production planning: assumptions are explicit and never persisted.
+  function calculateSchedule(){
+    const result=$("schedule-results"),msg=$("schedule-message");
+    const input=$("schedule-start").value;
+    const start=new Date(input);
+    const count=Number($("schedule-count").value);
+    if(!input || !Number.isFinite(start.getTime())){msg.textContent="Select a valid Furnace A start time.";result.replaceChildren();return;}
+    if(!Number.isInteger(count)||count<1||count>12){msg.textContent="Enter 1–12 heats per furnace.";result.replaceChildren();return;}
+    const actual=$("schedule-cast-end").value;
+    const actualDate=actual?new Date(actual):null;
+    if(actualDate && (!Number.isFinite(actualDate.getTime()) || actualDate.getTime()<start.getTime())){
+      msg.textContent="Actual casting end must be a valid time after Furnace A starts.";return;
+    }
+    const plus=(date,min)=>new Date(date.getTime()+min*60000);
+    const stamp=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    let rows=[];
+    for(let n=0;n<count;n++)for(const furnace of ["A","B"]){
+      const begin=plus(start,n*210+(furnace==="B"?60:0));
+      const marker=plus(begin,210);
+      const source=n===0&&furnace==="A"&&actualDate?actualDate:marker;
+      const rolling=plus(source,150),finish=plus(rolling,70);
+      const tr=document.createElement("tr");
+      [furnace,n+1,stamp(begin),stamp(marker),source===actualDate?"Actual end":"Estimated CCM marker",stamp(rolling),stamp(finish)].forEach(v=>tr.append(cell(v)));
+      rows.push(tr);
+    }
+    rows.sort((a,b)=>a.children[2].textContent.localeCompare(b.children[2].textContent));
+    tableInto("schedule-results",["Furnace","Heat #","Cycle start","CCM marker (+210m)","Basis","Rolling entry (+150m)","Rebar exit (+70m)"],rows);
+    msg.textContent=`Showing ${rows.length} planning rows. The 150-minute period is not necessarily transport driving time.`;
+  }
+  $("schedule-now").addEventListener("click",()=>{
+    const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+    $("schedule-start").value=d.toISOString().slice(0,16);calculateSchedule();
+  });
+  $("schedule-calculate").addEventListener("click",calculateSchedule);
+  $("schedule-start").addEventListener("change",calculateSchedule);
+  $("schedule-count").addEventListener("change",calculateSchedule);
+  $("schedule-cast-end").addEventListener("change",calculateSchedule);
+
   async function enterSession(session){
     if(!session){state.session=null;state.profile=null;$("app-shell").hidden=true;$("login-screen").hidden=false;return;}
     try{

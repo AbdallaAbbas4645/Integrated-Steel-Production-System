@@ -38,3 +38,6 @@ input[placeholder="YYYY-MM-DD HH:MM"]{direction:ltr;text-align:left;font-variant
 
 .open-supabase{display:inline-block;margin:12px 0 0;padding:10px 13px;border:1px solid var(--blue);border-radius:9px;color:var(--blue);text-decoration:none;font-weight:700}
 .open-supabase:hover{background:#17374a}
+
+/* v0.5 production schedule */
+.schedule-panel{margin-top:1rem}.schedule-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem;margin:1.25rem 0}.schedule-inputs label{display:flex;flex-direction:column;gap:.45rem}.schedule-inputs input{width:100%;color-scheme:dark}.schedule-actions{display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:1rem}.schedule-panel .table-wrap{overflow-x:auto}.schedule-panel table{min-width:920px}
