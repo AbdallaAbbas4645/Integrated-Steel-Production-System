@@ -3,15 +3,21 @@
 // This module can later be replaced with a REST API without rewriting the UI.
 class SteelRepository {
   constructor(supabase) { this.db=supabase; }
+  async read(operation,label) {
+    const run=async()=>{const {data,error,count}=await operation();if(error)throw error;return {data,count};};
+    return window.SteelArchitecture.resilientRead(run,{label});
+  }
   async fetch(table,limit=120) {
-    const {data,error}=await this.db.from(table).select("*").order(table==="profiles"?"created_at":"id",{ascending:false}).limit(limit);
-    if(error) throw error;
+    const {data}=await this.read(()=>this.db.from(table).select("*").order(table==="profiles"?"created_at":"id",{ascending:false}).limit(limit),`Fetch ${table}`);
     return data||[];
   }
   async profile(uid) {
-    const {data,error}=await this.db.from("profiles").select("*").eq("user_id",uid).single();
-    if(error) throw error;
+    const {data}=await this.read(()=>this.db.from("profiles").select("*").eq("user_id",uid).single(),"Staff profile");
     return data;
+  }
+  async count(table) {
+    const {count}=await this.read(()=>this.db.from(table).select("id",{count:"exact",head:true}),`Count ${table}`);
+    return count??0;
   }
   async insert(table,payload) {
     const {error}=await this.db.from(table).insert(payload);

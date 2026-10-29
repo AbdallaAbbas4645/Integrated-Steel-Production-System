@@ -88,7 +88,7 @@
       const num=document.createElement("div");num.className="number";num.textContent="…";
       const hint=document.createElement("div");hint.className="hint";hint.textContent="Latest 120 records";
       box.append(label,num,hint);cards.append(box);
-      repo.fetch(table).then(rows=>{if(box.isConnected)num.textContent=String(rows.length)+(rows.length===120?"+":"");})
+      repo.count(table).then(count=>{if(box.isConnected){num.textContent=String(count);hint.textContent="Records in database";}})
         .catch(()=>{if(box.isConnected)num.textContent="—";});
     }
     if(!accessible.length){cards.textContent="Your account has no assigned factory role yet. Ask an administrator to assign your role.";}
