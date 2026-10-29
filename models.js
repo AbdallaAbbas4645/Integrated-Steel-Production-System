@@ -12,7 +12,7 @@
   const modules = {
     heats: {
       title:"Melting & Casting", icon:"🔥", summary:"Record furnace heats, casting times and tonnage.",
-      creator:["admin","melting"], reader:["admin","management","melting","billet_transport","rolling"],
+      creator:["admin","melting"], reader:["admin","management","melting"],
       fields:[field("heat_number","Heat number"),field("furnace","Furnace","select",true,[["A","Furnace A"],["B","Furnace B"]]),
         field("weight_tons","Heat weight (tons)","number"),field("start_time","Melting start","datetime-local"),
         field("ccm_poured_at","CCM pouring time","datetime-local",false),field("notes","Notes","text",false)],
@@ -20,7 +20,7 @@
     },
     transfers: {
       title:"Billet Transfer",icon:"🚚",summary:"Record billet transfer arrival and delivered tons.",
-      creator:["admin","billet_transport"],reader:["admin","management","melting","billet_transport","rolling"],
+      creator:["admin","billet_transport"],reader:["admin","management","billet_transport"],
       fields:[field("heat_id","Source heat","heats"),field("arrived_at","Arrival at rolling","datetime-local"),
         field("delivered_tons","Delivered tons","number"),field("notes","Notes","text",false)],
       list:["heat_id","arrived_at","delivered_tons","notes"]
@@ -36,13 +36,13 @@
     },
     customers: {
       title:"Customers",icon:"👥",summary:"Customer contact and basic account details.",
-      creator:["admin","sales"],reader:["admin","management","sales","loading"],
+      creator:["admin","sales"],reader:["admin","management","sales"],
       fields:[field("name","Customer name"),field("phone","Phone","text",false),field("notes","Notes","text",false)],
       list:["name","phone","notes"]
     },
     sales_orders: {
       title:"Sales & Orders",icon:"📊",summary:"Create sales orders by customer, size, weight and price.",
-      creator:["admin","sales"],reader:["admin","management","sales","loading"],
+      creator:["admin","sales"],reader:["admin","management","sales"],
       fields:[field("order_no","Order number"),field("customer_id","Customer","customers"),
         field("size_mm","Bar size (mm)","select",true,[["12","12 mm"],["14","14 mm"],["16","16 mm"]]),
         field("qty_tons","Ordered tons","number"),field("price_per_ton","Price per ton","number"),
@@ -51,7 +51,7 @@
     },
     loading_events: {
       title:"Loading & Dispatch",icon:"📦",summary:"Record truck information, loading and dispatch times.",
-      creator:["admin","loading"],reader:["admin","management","sales","loading"],
+      creator:["admin","loading"],reader:["admin","management","loading"],
       fields:[field("order_id","Sales order","sales_orders"),field("truck_plate","Truck plate"),
         field("driver_name","Driver name","text",false),field("loaded_tons","Loaded tons","number"),
         field("loaded_at","Loading time","datetime-local"),field("status","Status","select",true,[["Loaded","Loaded"],["Dispatched","Dispatched"]])],

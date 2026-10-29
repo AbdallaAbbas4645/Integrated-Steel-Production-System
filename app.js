@@ -12,12 +12,17 @@
   if(!window.supabase?.createClient){authNotice("Supabase library did not load. Check internet/CDN access and reload.",true);return;}
   const client=window.supabase.createClient(cfg.url,cfg.publishableKey);
   const repo=new SteelRepository(client);
+  const arch=window.SteelArchitecture;
+  const workflowEvents=new arch.EventBus();
+  const workflowService=new arch.WorkflowService(new arch.SupabaseWorkflowAdapter(client),workflowEvents);
+  const schedule=new arch.ScheduleStrategy();
+  workflowEvents.on("workflow.saved",()=>{ /* Event is available for independent dashboard consumers. */ });
 
   const allowed=table=>modules[table]?.reader.includes(state.profile?.role);
   const canCreate=table=>modules[table]?.creator.includes(state.profile?.role);
   const ownRecord=(row,table)=>String(table==="heats"?row.user_id:row.created_by)===state.session?.user.id;
   const admin=()=>state.profile?.role==="admin";
-  const mayRequest=(table,row)=>admin()|| (canCreate(table)&&ownRecord(row,table));
+  const mayRequest=(table,row)=>admin() || canCreate(table); // Department-wide change requests; server still approves
   function cell(text){const td=document.createElement("td");td.textContent=text??"—";return td;}
   function button(text,cls,callback){const el=document.createElement("button");el.type="button";el.textContent=text;el.className=cls;el.addEventListener("click",callback);return el;}
   function fmt(value,key=""){
@@ -37,6 +42,7 @@
   function navItems(){
     const items=[{id:"overview",title:"Overview",icon:"◫"}];
     Object.entries(modules).forEach(([id,m])=>{if(allowed(id))items.push({id,title:m.title,icon:m.icon});});
+    if(["admin","management","sales"].includes(state.profile?.role))items.push({id:"inventory",title:"Finished Goods Inventory",icon:"📦"});
     if(state.profile?.role!=="viewer")items.push({id:"requests",title:"Change Requests",icon:"📝"});
     if(admin())items.push({id:"users",title:"Staff & Roles",icon:"🛡️"});
     if(["admin","management"].includes(state.profile?.role))items.push({id:"audit",title:"Audit Trail",icon:"📜"});
@@ -50,10 +56,10 @@
   }
   function navigate(view){
     state.active=view;state.table=modules[view]?view:null;
-    ["overview","records","requests","users","audit"].forEach(v=>$(v+"-view").hidden=true);
+    ["overview","records","requests","users","audit","inventory"].forEach(v=>$(v+"-view").hidden=true);
     const screen=state.table?"records":view;
     $(screen+"-view").hidden=false;
-    $("current-title").textContent=state.table?modules[view].title:({overview:"Overview",requests:"Change Requests",users:"Staff & Roles",audit:"Audit Trail",schedule:"Production Schedule"}[view]);
+    $("current-title").textContent=state.table?modules[view].title:({overview:"Overview",requests:"Change Requests",users:"Staff & Roles",audit:"Audit Trail",inventory:"Finished Goods Inventory"}[view]);
     buildNavigation();$("global-message").textContent="";
     $("sidebar").classList.remove("open");
     if(state.table)loadRecords();
@@ -61,6 +67,7 @@
     else if(view==="requests")loadRequests();
     else if(view==="users")loadUsers();
     else if(view==="audit")loadAudit();
+    else if(view==="inventory")loadInventory();
     
   }
   async function loadOverview(){
@@ -191,6 +198,7 @@
     const show=canCreate(table);$("create-panel").hidden=!show;
     if(!show)return;
     if(table==="heats"){renderHeatForm();return;}
+    if(["transfers","rolling_batches","loading_events"].includes(table)){ $("create-panel").hidden=true;return; }
     $("record-save").textContent="Save record";$("create-title").textContent="Register new "+config.title.toLowerCase();
     const fields=$("record-fields");fields.replaceChildren();
     for(const f of config.fields){fields.append(await makeField(f));}
@@ -204,9 +212,9 @@
       if(state.table!==table)return;
       state.records=records;
       $("records-count").textContent=records.length+" records";
-      const m=modules[table],rows=records.map(row=>{
+      const m=modules[table],heatMap=(["transfers","rolling_batches"].includes(table)?new Map((await repo.fetch("heats",120)).map(h=>[String(h.id),h.heat_number])):new Map()),rows=records.map(row=>{
         const tr=document.createElement("tr");
-        tr.append(cell(row.id));m.list.forEach(key=>tr.append(cell(key==="payment_terms" && !row[key]?"Not set (older order)":fmt(row[key],key))));
+        tr.append(cell(row.id));m.list.forEach(key=>tr.append(cell(key==="heat_id"?(heatMap.get(String(row[key]))||"Historical heat #"+row[key]):key==="payment_terms" && !row[key]?"Not set (older order)":fmt(row[key],key))));
         const actions=document.createElement("td"),area=document.createElement("div");area.className="actions";
         if(mayRequest(table,row)){
           area.append(button(admin()?"Edit":"Request edit","outline small",()=>openChange(table,row,"update")));
@@ -215,10 +223,13 @@
         actions.append(area);tr.append(actions);return tr;
       });
       tableInto("records-table",["ID",...m.list.map(k=>m.fields.find(f=>f.key===k)?.label||k),"Actions"],rows);
+      const live=$("factory-flow-panel");live.hidden=!["transfers","rolling_batches","loading_events","sales_orders"].includes(table);
+      $("records-view").classList.toggle("wide-records",table!=="heats");
+      if(!live.hidden)await renderFactoryFlow(table);
       $("heat-workflow-panel").hidden=table!=="heats";
       if(table==="heats")await renderHeatWorkflow();
-      $("transfer-queue-panel").hidden=table!=="transfers";
-      if(table==="transfers")await renderTransferQueue();
+      $("transfer-queue-panel").hidden=true;
+      
     }catch(err){notice("Failed to load records: "+err.message,true);}
   }
   $("record-form").addEventListener("submit",async(event)=>{
@@ -306,18 +317,20 @@
     }else{
       const row=input.closest(".date-input-row");
       if(row){row.parentNode.insertBefore(input,row);row.remove();}
-      input.readOnly=false;input.pattern="";input.maxLength=524288;input.type=numberFields.has(field)?"number":"text";
+      input.readOnly=false;input.removeAttribute("pattern");input.removeAttribute("min");input.removeAttribute("max");input.removeAttribute("step");input.maxLength=524288;input.type=numberFields.has(field)?"number":"text";
       input.inputMode=numberFields.has(field)?"decimal":"text";
       input.classList.remove("date-entry");
       input.placeholder="Enter new value";
     }
     input.value="";
+    input.setCustomValidity("");
   }
   $("change-field").addEventListener("change",configureChangeValue);
   $("change-form").addEventListener("submit",async event=>{
     event.preventDefault();if(!state.change||!state.session)return;
     const {table,row,action}=state.change;
     const reason=$("change-reason").value.trim();
+    $("change-value").setCustomValidity("");
     if(reason.length<5){notice("Please enter at least 5 characters for the reason.",true);return;}
     let changes={};
     try{
@@ -461,6 +474,106 @@
     }catch(err){notice("Audit unavailable: "+err.message,true);}
   }
 
+  // V0.7: staged flow panels. All state transitions are performed by an
+  // authenticated SQL RPC; buttons do not directly insert/update stage tables.
+  function fieldControl(title,type,opts=[]) {
+    const lab=document.createElement('label');lab.textContent=title;
+    const input=document.createElement(opts.length?'select':'input');
+    if(!opts.length){input.type=type||'text';if(type==='number'){input.min='0.01';input.step='any';}}
+    opts.forEach(([v,name])=>{const o=document.createElement('option');o.value=v;o.textContent=name;input.append(o);});
+    lab.append(input);return {lab,input};
+  }
+  async function stage(action,id,args={},success='Stage saved') {
+    try{
+      await workflowService.run(action,id,args);
+      await loadRecords();notice(success);
+    }catch(e){notice('Operation failed: '+e.message,true);}
+  }
+  const heatTitle=(h)=>`${h.heat_number} · Furnace ${h.furnace} · ${h.weight_tons} tons`;
+  function flowCard(heading,detail){
+    const c=document.createElement('div');c.className='workflow-card';
+    const h=document.createElement('h4');h.textContent=heading;
+    const p=document.createElement('p');p.className='muted';p.textContent=detail;c.append(h,p);return c;
+  }
+  function flowBtn(card,label,action){const b=button(label,'primary small',action);card.append(b);return b;}
+  function appendForm(card,controls,label,handler){
+    const form=document.createElement('form');form.className='compact-flow-form';
+    controls.forEach(c=>form.append(c.lab));const save=button(label,'primary',()=>{});save.type='submit';form.append(save);
+    form.addEventListener('submit',async e=>{e.preventDefault();save.disabled=true;try{await handler(controls.map(c=>c.input.value));}finally{save.disabled=false;}});
+    card.append(form);
+  }
+  async function loadInventory(){
+    const container=$('inventory-metrics');container.replaceChildren();
+    try{
+      const {data,error}=await client.rpc('factory_inventory');if(error)throw error;
+      for(const row of data){const c=document.createElement('article');c.className='metric';
+        const x=document.createElement('strong');x.textContent=`${row.size_mm} mm`;x.className='label';
+        const n=document.createElement('div');n.className='number';n.textContent=`${Number(row.available_tons).toFixed(2)} t`;
+        const hint=document.createElement('div');hint.className='hint';hint.textContent=`Produced ${row.produced_tons} t · Dispatched ${row.dispatched_tons} t`;
+        c.append(x,n,hint);container.append(c);
+      }
+    }catch(e){notice('Inventory unavailable: '+e.message,true);}
+  }
+  async function renderFactoryFlow(table){
+    const box=$('factory-flow');box.replaceChildren();
+    const name=$('factory-flow-title'),desc=$('factory-flow-help');
+    const working=canCreate(table),heats=['transfers','rolling_batches'].includes(table)?await repo.fetch('heats',120):[];
+    const transfers=table==='transfers'||table==='rolling_batches'?await repo.fetch('transfers',120):[];
+    if(table==='transfers'){
+      name.textContent='Ready · In transit · Arrived';
+      desc.textContent=working?'Choose a heat marked Ready for Transfer, start transport, then record its arrival at the rolling mill.':'View transfer progress; transport controls are limited to the transport team.';
+      const byHeat=new Set(transfers.map(t=>String(t.heat_id)));
+      for(const h of heats.filter(x=>x.ready_for_transfer_at&&!byHeat.has(String(x.id)))){
+        const card=flowCard(heatTitle(h),`Ready since ${displayFactoryTime(h.ready_for_transfer_at)} · Estimated rolling entry ${displayFactoryTime(addMinutes(h.casting_ended_at||h.ready_for_transfer_at,150))}`);
+        if(working)flowBtn(card,'Start Transfer',()=>stage('transfer_start',h.id,{},'Transfer started.'));box.append(card);
+      }
+      for(const t of transfers){
+        const h=heats.find(x=>String(x.id)===String(t.heat_id));
+        const label=h?heatTitle(h):`Heat record ${t.heat_id}`;
+        const detail=t.arrived_at?`Arrived ${displayFactoryTime(t.arrived_at)} · Delivered ${t.delivered_tons} tons`:`In transit · Started ${displayFactoryTime(t.started_at)||'Legacy record'}`;
+        const card=flowCard(label,detail);
+        if(working&&t.started_at&&!t.arrived_at){const tons=fieldControl('Delivered tons','number');
+          if(h)tons.input.value=String(h.weight_tons);
+          appendForm(card,[tons],'Confirm Arrival',async ([v])=>stage('transfer_arrive',t.id,{tons:Number(normDigits(v))},'Billet arrived and is available for rolling.'));
+        }box.append(card);
+      }
+    }else if(table==='rolling_batches'){
+      name.textContent='Arrived billets · Active rolling · Finished';
+      desc.textContent='Start rolling only after billet arrival. Ending rolling adds finished tons to inventory.';
+      const batches=await repo.fetch('rolling_batches',120),byHeat=new Set(batches.map(b=>String(b.heat_id)));
+      for(const t of transfers.filter(x=>x.arrived_at&&!byHeat.has(String(x.heat_id)))){
+        const h=heats.find(x=>String(x.id)===String(t.heat_id));if(!h)continue;
+        const card=flowCard(heatTitle(h),`Billet arrived ${displayFactoryTime(t.arrived_at)} · ${t.delivered_tons} t available for rolling`);
+        if(working){const sz=fieldControl('Bar size (mm)','select',[['12','12 mm'],['14','14 mm'],['16','16 mm']]);
+          appendForm(card,[sz],'Start Rolling',async([v])=>stage('rolling_start',h.id,{size_mm:Number(v)},'Rolling started.'));
+        }box.append(card);
+      }
+      for(const b of batches){const h=heats.find(x=>String(x.id)===String(b.heat_id));
+        const card=flowCard(`${h?.heat_number||'Heat '+b.heat_id} · ${b.size_mm} mm`,b.finished_at?`Finished ${displayFactoryTime(b.finished_at)} · ${b.produced_tons} t added to inventory`:`Rolling started ${displayFactoryTime(b.started_at)} · Expected finish ${displayFactoryTime(b.expected_finished_at||addMinutes(b.started_at,70))}`);
+        if(working&&!b.finished_at){const tons=fieldControl('Finished tons','number');const t=transfers.find(x=>String(x.heat_id)===String(b.heat_id));if(t?.delivered_tons)tons.input.value=String(t.delivered_tons);
+          appendForm(card,[tons],'End Rolling',async([v])=>stage('rolling_end',b.id,{tons:Number(normDigits(v))},'Rolling completed. Inventory updated.'));
+        }box.append(card);
+      }
+    }else if(table==='loading_events'){
+      name.textContent='Dispatch an order';desc.textContent='Confirmed dispatch deducts available stock and updates remaining order quantity. No duplicate stock deductions.';
+      const orders=await repo.fetch('sales_orders',120),dispatches=await repo.fetch('loading_events',120);
+      const inventory=await client.rpc('factory_inventory');if(inventory.error)throw inventory.error;
+      for(const o of orders){const used=dispatches.filter(x=>String(x.order_id)===String(o.id)&&['Loaded','Dispatched'].includes(x.status)).reduce((a,x)=>a+Number(x.loaded_tons||0),0),remaining=Number(o.qty_tons)-used;
+        const stock=inventory.data.find(x=>Number(x.size_mm)===Number(o.size_mm));
+        const card=flowCard(`Order ${o.order_no} · ${o.size_mm} mm`,remaining<0?`⚠ Over-dispatched by ${Math.abs(remaining).toFixed(2)} t in historical records. Ask Admin to investigate.`:`Order remaining: ${remaining.toFixed(2)} tons · Factory available for ${o.size_mm} mm: ${Number(stock?.available_tons||0).toFixed(2)} tons`);
+        if(working&&remaining>0){const plate=fieldControl('Truck plate','text'),driver=fieldControl('Driver name (optional)','text'),tons=fieldControl('Dispatched tons','number');
+          appendForm(card,[plate,driver,tons],'Confirm Dispatch',async([p,d,v])=>stage('dispatch',o.id,{truck_plate:p,driver_name:d,tons:Number(normDigits(v))},'Dispatch saved. Stock and order updated.'));
+        }box.append(card);
+      }
+    }else if(table==='sales_orders'){
+      name.textContent='Available finished goods';desc.textContent='Inventory is linked to completed rolling and confirmed dispatches. Orders may be created before stock exists; dispatch requires available stock.';
+      const result=await client.rpc('factory_inventory');if(result.error)throw result.error;
+      for(const s of result.data)box.append(flowCard(`${s.size_mm} mm`,`${Number(s.available_tons).toFixed(2)} t available · ${s.produced_tons} t produced · ${s.dispatched_tons} t dispatched`));
+    }
+    if(!box.children.length)box.textContent='No items ready for this stage.';
+  }
+  $('refresh-flow').addEventListener('click',()=>state.table&&renderFactoryFlow(state.table).catch(e=>notice(e.message,true)));
+  $('refresh-inventory').addEventListener('click',loadInventory);
   // Workflow expectations: combined melting+casting cycle = 210 min.
   // Standalone melting/casting durations are not known and are not invented.
   const stageNames={melting:"Melting in progress",melting_done:"Melting completed",casting:"Casting in progress",ready:"Ready for Transfer"};
