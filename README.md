@@ -1,6 +1,6 @@
 # Integrated Steel Production and Operations Management System
 
-A role-controlled factory operations web application. **University project — development version 0.2.**
+A role-controlled factory operations web application. **University project — deployed web prototype; report follows the official 19-question course template.**
 
 ## Business problem
 
@@ -45,7 +45,7 @@ sql/02_make_admin.sql      Administrator bootstrap (replace YOUR email)
 docs/ADR-001-architecture.md
 ```
 
-## Setup (run SQL BEFORE publishing code)
+## Original setup notes (historical; DO NOT rerun on the deployed database)
 
 1. **Back up your existing Supabase database**, particularly the `heats` table. The migration adds tables and columns; it does not delete earlier heats, but database migrations always deserve a backup.
 2. In Supabase SQL Editor, run `sql/01_setup.sql` once. It adds roles, tables, RLS, audit and approval RPC functions. A successful run returns `Success. No rows returned`.
@@ -62,8 +62,8 @@ The earlier tutorial used a `heats` table and policies named `Users can read own
 ### Safety & limitations
 
 - All inserts/updates to production records are validated by the database and RLS. Employees can create records in their own modules but cannot directly update/delete an existing record. They can request one-field edits/deletion. Admin approvals are applied by a guarded server-side RPC.
-- On this version, the Overview counts only the most recent 120 rows. It is NOT an audited production total.
-- Physical inventory reconciliation, dispatch order fulfillment checks, melting transfer/rolling predictions and advanced reporting are **future milestones**. Do not use this MVP to make automated production or sales decisions without reconciliation.
+- In the current deployed version, Overview uses exact database counts; verify counts against independent audits where required.
+- Inventory and dispatch checks exist in the current workflow; historical test-data inconsistency and unexecuted concurrency/security tests remain limitations. Do not use this MVP to make automated production or sales decisions without reconciliation.
 - The current Supabase Free tier and Netlify usage limits still apply. Keep Netlify automated builds stopped during development.
 
 ## Manual verification checklist
@@ -75,3 +75,15 @@ The earlier tutorial used a `heats` table and policies named `Users can read own
 - Admin approves; record changes. Admin rejects a second request; no record change.
 - Manager can view reports/audit but cannot add/edit/delete.
 - Supabase RLS denies operations performed directly from a staff account against another module.
+
+
+## Current course submission and live demo
+
+- **Web demo:** https://steel-production-system-4645.netlify.app (login required; only authorized staff accounts).
+- **Instructor report:** [`reports/README.md`](reports/README.md), preserving the original 19 questions.
+- **Architecture figure:** [`reports/figures/steelops-c4.png`](reports/figures/steelops-c4.png).
+- **Automated tests:** `node --test tests/*.test.js` (57 passed in review of the uploaded `main` snapshot).
+- **Known test-data issue:** sales order database ID 3 has 25 t ordered / 30 t shipped. Do not present this as production-correct data.
+- **Limitations:** full adversarial RLS testing, independent concurrent-dispatch testing, and user-specific live workflow audit are not fully evidenced. Do not claim production certification.
+- **Group:** Abdalla Abbas (230504645) and Ahmed Elsayed (230504538); group number not yet assigned; both jointly contributed throughout.
+- **AI use:** ChatGPT assistance is disclosed in the official report, Question 18.
