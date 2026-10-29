@@ -46,3 +46,11 @@ input[placeholder="YYYY-MM-DD HH:MM"]{direction:ltr;text-align:left;font-variant
 .workflow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:14px;margin-top:14px}
 .workflow-card{padding:16px;background:#14243a;border:1px solid #2b425d;border-radius:12px;min-width:0}
 .workflow-card h4{margin:0 0 8px}.workflow-detail p{font-size:.87rem;line-height:1.65}.stage-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+/* V0.7 integrated wide records and workflow */
+.record-layout{grid-template-columns:minmax(300px,400px) minmax(0,1fr)}
+.wide-records .record-layout{grid-template-columns:minmax(0,1fr)}
+.wide-records .list-panel{width:100%}.wide-records .table-wrap{overflow-x:auto}
+#factory-flow-panel{margin-top:18px}#factory-flow{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.compact-flow-form{display:grid;gap:10px;margin-top:15px}.compact-flow-form label{margin:0}
+.compact-flow-form button{margin-top:4px}

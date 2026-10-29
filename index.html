@@ -55,9 +55,10 @@
             </section>
           </div>
           <section class="panel" id="heat-workflow-panel" hidden><h3>Live Heat Workflow</h3><p class="muted">Each stage is saved separately. The 210-minute marker covers melting and casting together, not melting alone.</p><div id="heat-workflow" class="workflow-grid"></div></section>
+          <section class="panel" id="factory-flow-panel" hidden><div class="heading compact"><h3 id="factory-flow-title">Live operations</h3><button id="refresh-flow" class="outline small" type="button">Refresh workflow</button></div><p class="muted" id="factory-flow-help">Live records and stage controls.</p><div id="factory-flow" class="workflow-grid"></div></section>
           <section class="panel" id="transfer-queue-panel" hidden><h3>Ready for Transfer</h3><p class="muted">Heats appear here only after End Casting is recorded. Select the matching heat when registering delivery.</p><div id="transfer-queue" class="workflow-grid"></div></section>
         </section>
-        <section id="requests-view" class="screen" hidden>
+        <section id="inventory-view" class="screen" hidden><div class="heading"><div><h2>Finished Goods Inventory</h2><p>Finished rolling production minus dispatched tons, by bar size.</p></div><button id="refresh-inventory" class="outline" type="button">Refresh</button></div><div class="metrics" id="inventory-metrics"></div><div class="panel"><h3>Inventory rules</h3><p class="muted">Inventory increases when rolling is finished and decreases after a confirmed dispatch. The system prevents dispatching more than the available stock or remaining order quantity.</p></div></section><section id="requests-view" class="screen" hidden>
           <div class="heading"><div><h2>Change requests</h2><p>Editing or deleting a saved record requires administrator approval.</p></div><button id="refresh-requests" class="outline" type="button">Refresh</button></div>
           <div class="panel"><div id="requests-table" class="table-wrap"></div></div>
         </section>
@@ -70,7 +71,7 @@
           <div class="panel"><p class="muted">An automatic history of factory activities. Select View changes to see what information changed, in everyday language.</p><div id="audit-table" class="table-wrap"></div></div>
         </section>
       </main>
-      <footer>SteelOps · Architecture-first student project · Version 0.6</footer>
+      <footer>SteelOps · Architecture-first student project · Version 0.8</footer>
     </div>
   </div>
 
@@ -101,6 +102,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="models.js"></script>
   <script src="repository.js"></script>
+  <script src="architecture.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

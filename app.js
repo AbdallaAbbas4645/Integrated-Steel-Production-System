@@ -55,6 +55,15 @@
     });
   }
   function navigate(view){
+    // Navigation is a presentation boundary, not a substitute for PostgreSQL RLS.
+    const role=state.profile?.role;
+    const permitted=(view==='overview') ||
+      (Boolean(modules[view]) && allowed(view)) ||
+      (view==='inventory' && ['admin','management','sales'].includes(role)) ||
+      (view==='requests' && role!=='viewer') ||
+      (view==='users' && admin()) ||
+      (view==='audit' && ['admin','management'].includes(role));
+    if(!permitted){notice('This page is not available for your assigned role.',true);return;}
     state.active=view;state.table=modules[view]?view:null;
     ["overview","records","requests","users","audit","inventory"].forEach(v=>$(v+"-view").hidden=true);
     const screen=state.table?"records":view;
